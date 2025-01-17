@@ -44,6 +44,5 @@ import "dotenv/config";
     await runJob({ batchOption, page });
   }
 
-  await sleep(10000);
   await browser.close();
 })();

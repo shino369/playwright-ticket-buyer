@@ -16,7 +16,7 @@ export const color = (color: ColorType, message: any) => {
 };
 
 export const sleep = async (ms: number) => {
-  await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, ms));
 };
 
 type DateTimeOptions = {

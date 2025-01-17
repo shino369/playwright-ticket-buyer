@@ -8,6 +8,7 @@ declare global {
         TARGET_TIME: string;
         TARGET_VENUE: string;
         TARGET_OPEN_TIME: string;
+        ADD_COMPANION: '0' | '1';
         EMAIL: string;
         PASSWORD: string;
       }

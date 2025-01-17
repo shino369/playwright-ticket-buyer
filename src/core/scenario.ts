@@ -1,4 +1,4 @@
-import { color, waitUntil, BatchOption } from "../utils/index.js";
+import { color, waitUntil, BatchOption, sleep } from "../utils/index.js";
 import { Page } from "playwright";
 
 export const login = async ({
@@ -75,7 +75,9 @@ export const runJob = async ({
 
   await matchTarget({ page, targetVenue, targetOpenTime });
   await selectLive(page);
-  await addCompanion(page);
+  if (process.env.ADD_COMPANION === "1") {
+    await addCompanion(page);
+  }
 
   console.log(color("operation", "Navigating to the select payment page..."));
   await goNext(page);
@@ -89,8 +91,10 @@ export const runJob = async ({
 
   await saveScreenshot(page);
 
-  //   console.log(color("operation", "Navigating to the finished page..."));
+  console.log(color("operation", "Navigating to the finished page..."));
   //   await goNext(page);
+  
+  await sleep(10000);
 };
 
 /**
