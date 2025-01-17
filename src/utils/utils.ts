@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import { Page } from "playwright";
 
 /**
  * Colorize the message with the specified color.
@@ -27,17 +26,17 @@ type DateTimeOptions = {
 
 type PaymentMethod = "ローソン" | "セブン-イレブン" | "ファミリーマート";
 
-export type BaseOption = {
+export type BaseOptions = {
   targetUrl: string;
   paymentMethod: PaymentMethod;
 };
 
-export type BatchOption = {
+export type BatchOptions = {
   targetDate: string;
   targetVenue: string;
   targetOpenTime: string;
   companion: boolean;
-} & BaseOption;
+} & BaseOptions;
 
 const checkTimeStringRegex = (time: string) => {
   const regex = new RegExp(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
@@ -88,6 +87,13 @@ export const waitUntil = async (targetTime: DateTimeOptions) => {
 
 export const splitDateString = (targetDate: string) => {
   // targetDate: "2025/03/01"
+
+  const regex = new RegExp(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!regex.test(targetDate)) {
+    throw new Error(
+      "Invalid date format. Please use the following format: 'YYYY/MM/DD'"
+    );
+  }
 
   const [year, month, day] = targetDate.split("/");
   return { year, month, day };

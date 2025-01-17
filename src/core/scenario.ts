@@ -1,4 +1,4 @@
-import { color, BatchOption, splitDateString } from "../utils/index.js";
+import { color, BatchOptions, splitDateString, sleep } from "../utils/index.js";
 import { Page } from "playwright";
 
 export const login = async ({
@@ -55,7 +55,7 @@ export const login = async ({
 };
 
 type Job = {
-  batchOption: BatchOption;
+  batchOptions: BatchOptions;
   page: Page;
   jobIndex: number;
 };
@@ -147,22 +147,42 @@ const goNext = async (job: Job) => {
  * @param job
  */
 const checkSiteAvailability = async (job: Job) => {
-  const { batchOption, page, jobIndex } = job;
-  const { targetUrl } = batchOption;
+  const { batchOptions, page, jobIndex } = job;
+  const { targetUrl } = batchOptions;
 
   console.log(color("text", `[${jobIndex}] Going to the target site...`));
 
-  try {
-    await page.goto(targetUrl);
-    await page.waitForURL(targetUrl, {
-      timeout: 30000,
-      waitUntil: "domcontentloaded",
-    });
-  } catch (e) {
-    const currentUrl = page.url();
-    throw new Error(
-      "The target page is not available. Current URL: " + currentUrl
-    );
+  const retryOptions = {
+    retries: 3,
+    delay: 250,
+  };
+
+  let attempts = 0;
+  while (attempts < retryOptions.retries) {
+    try {
+      attempts++;
+      await page.goto(targetUrl);
+      await page.waitForURL(targetUrl, {
+        timeout: 10000,
+        waitUntil: "domcontentloaded",
+      });
+      break;
+    } catch (e) {
+      const currentUrl = page.url();
+      if (attempts >= retryOptions.retries) {
+        throw new Error(
+          "The target page is not available. Current URL: " + currentUrl
+        );
+      }
+
+      console.log(
+        color(
+          "error",
+          `[${jobIndex}] The target page is not available. Retrying...`
+        )
+      );
+      await sleep(retryOptions.delay);
+    }
   }
 };
 
@@ -171,8 +191,8 @@ const checkSiteAvailability = async (job: Job) => {
  * @param job
  */
 const matchTargetLive = async (job: Job) => {
-  const { batchOption, page, jobIndex } = job;
-  const { targetDate, targetVenue, targetOpenTime } = batchOption;
+  const { batchOptions, page, jobIndex } = job;
+  const { targetDate, targetVenue, targetOpenTime } = batchOptions;
 
   console.log(color("text", `[${jobIndex}] Checking if target live exist...`));
   const splitedDate = splitDateString(targetDate);
@@ -242,9 +262,9 @@ const selectLiveTicket = async (job: Job) => {
  * @param job
  */
 const addCompanion = async (job: Job) => {
-  const { page, jobIndex, batchOption } = job;
+  const { page, jobIndex, batchOptions } = job;
 
-  if (!batchOption.companion) return;
+  if (!batchOptions.companion) return;
 
   /**
    * locate the target button of selecting the number of tickets
@@ -298,8 +318,8 @@ const addCompanion = async (job: Job) => {
  * @param job
  */
 const selectPayment = async (job: Job) => {
-  const { page, jobIndex, batchOption } = job;
-  const { paymentMethod } = batchOption;
+  const { page, jobIndex, batchOptions } = job;
+  const { paymentMethod } = batchOptions;
   /**
    * again, locate the first element with query `tpl-radio-group`
    * locate the element with query `tpl-radio-button`which has text `セブン-イレブン`
