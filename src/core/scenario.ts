@@ -43,7 +43,7 @@ export const login = async ({
   await page.click("#btn-idpw-login");
 
   // wait until the page is redirected to https://asobiticket2.asobistore.jp/receptions
-  await page.waitForURL("https://asobiticket2.asobistore.jp/receptions", {
+  await page.waitForURL(entryUrl, {
     timeout: 30000,
     waitUntil: "domcontentloaded",
   });
