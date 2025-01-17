@@ -17,8 +17,6 @@ import "dotenv/config";
 
   const { targetDateTimeOptions, batchOptionsArr } = getTargetConfig();
 
-  if (1 == 1) return;
-
   console.log(color("operation", "Launching browser..."));
   const browser = await chromium.launch({
     headless: false,
