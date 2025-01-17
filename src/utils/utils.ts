@@ -138,10 +138,30 @@ export const getTargetConfig = () => {
 
     const formattedConfig = { targetDateTimeOptions, batchOptionsArr };
     console.log(formattedConfig);
-    
+
     return formattedConfig;
   } catch (e) {
     console.error(color("error", `Error reading target.json: ${e}`));
     process.exit(1);
   }
+};
+
+export const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 250
+) => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (e) {
+      console.error(color("error", `An error occurred: ${e}`));
+      if (attempt === maxRetries - 1) throw e;
+      await sleep(baseDelay * 2 ** attempt);
+      attempt++;
+      console.log(color("text", `Retrying... Attempt ${attempt + 1}`));
+    }
+  }
+  throw new Error("Max retries reached");
 };

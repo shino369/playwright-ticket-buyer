@@ -4,6 +4,7 @@ import {
   BatchOptions,
   color,
   getTargetConfig,
+  retryWithBackoff,
   sleep,
   waitUntil,
 } from "./utils/index.js";
@@ -37,7 +38,20 @@ import "dotenv/config";
     // run batch jobs (parallel async job not working as expected)
     for (const [jobIndex, batchOptions] of batchOptionsArr.entries()) {
       const page = await context.newPage();
-      await runJob({ batchOptions, page, jobIndex });
+      try {
+        await retryWithBackoff(async () => {
+          await runJob({ batchOptions, page, jobIndex });
+        });
+      } catch (e) {
+        page.close();
+        const err = e instanceof Error ? e : new Error(e as any);
+        console.log(
+          color(
+            "error",
+            `[${jobIndex}] job ${jobIndex} failed. Error occurred: ${err.message}`
+          )
+        );
+      }
     }
 
     // wait for 30 seconds before closing the browser

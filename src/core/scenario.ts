@@ -1,4 +1,10 @@
-import { color, BatchOptions, splitDateString, sleep } from "../utils/index.js";
+import {
+  color,
+  BatchOptions,
+  splitDateString,
+  sleep,
+  retryWithBackoff,
+} from "../utils/index.js";
 import { Page } from "playwright";
 
 export const login = async ({
@@ -61,28 +67,18 @@ type Job = {
 };
 
 export const runJob = async (job: Job) => {
-  try {
-    await proceedLandingPage(job);
-    await proceedSelectTicketPage(job);
-    await proceedSelectPaymentPage(job);
-    await proceedTOSPage(job);
-    await proceedFinishPage(job);
+  await proceedLandingPage(job);
+  await proceedSelectTicketPage(job);
+  await proceedSelectPaymentPage(job);
+  await proceedTOSPage(job);
+  await proceedFinishPage(job);
 
-    console.log(
-      color(
-        "operation",
-        `[${job.jobIndex}] job ${job.jobIndex} finished successfully!`
-      )
-    );
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error(e as any);
-    console.log(
-      color(
-        "error",
-        `[${job.jobIndex}] job ${job.jobIndex} failed. Error occurred: ${err.message}`
-      )
-    );
-  }
+  console.log(
+    color(
+      "operation",
+      `[${job.jobIndex}] job ${job.jobIndex} finished successfully!`
+    )
+  );
 };
 
 const proceedLandingPage = async (job: Job) => {
@@ -139,7 +135,9 @@ const goNext = async (job: Job) => {
     throw new Error("The next button is not found.");
   }
   await nextBtn.click();
-  await page.waitForLoadState("domcontentloaded");
+  await page.waitForLoadState("domcontentloaded", {
+    timeout: 5000,
+  });
 };
 
 /**
@@ -149,40 +147,15 @@ const goNext = async (job: Job) => {
 const checkSiteAvailability = async (job: Job) => {
   const { batchOptions, page, jobIndex } = job;
   const { targetUrl } = batchOptions;
-
   console.log(color("text", `[${jobIndex}] Going to the target site...`));
 
-  const retryOptions = {
-    retries: 3,
-    delay: 250,
-  };
+  const res = await page.goto(targetUrl, {
+    timeout: 30000,
+    waitUntil: "domcontentloaded",
+  });
 
-  let attempts = 0;
-  while (attempts < retryOptions.retries) {
-    try {
-      attempts++;
-      await page.goto(targetUrl);
-      await page.waitForURL(targetUrl, {
-        timeout: 10000,
-        waitUntil: "domcontentloaded",
-      });
-      break;
-    } catch (e) {
-      const currentUrl = page.url();
-      if (attempts >= retryOptions.retries) {
-        throw new Error(
-          "The target page is not available. Current URL: " + currentUrl
-        );
-      }
-
-      console.log(
-        color(
-          "error",
-          `[${jobIndex}] The target page is not available. Retrying...`
-        )
-      );
-      await sleep(retryOptions.delay);
-    }
+  if (res?.url() !== targetUrl || page.url() !== targetUrl) {
+    throw new Error("The target site is not available.");
   }
 };
 
@@ -198,7 +171,9 @@ const matchTargetLive = async (job: Job) => {
   const splitedDate = splitDateString(targetDate);
 
   // locate the target button with the desired text
-  await page.waitForSelector(".tour-act");
+  await page.waitForSelector(".tour-act", {
+    timeout: 3000,
+  });
 
   /**
    * locate the target .tour-act with children:
