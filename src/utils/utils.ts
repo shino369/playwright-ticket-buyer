@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import fs from "fs";
 
 /**
  * Colorize the message with the specified color.
@@ -97,4 +98,50 @@ export const splitDateString = (targetDate: string) => {
 
   const [year, month, day] = targetDate.split("/");
   return { year, month, day };
+};
+
+type TargetConfig = {
+  timeZone: string;
+  startTime: string;
+  targetUrl: string;
+  paymentMethod: PaymentMethod;
+  batchOptionsArr: {
+    targetDate: string;
+    targetVenue: string;
+    targetOpenTime: string;
+    companion: boolean;
+  }[];
+};
+
+export const getTargetConfig = () => {
+  try {
+    const rawData = fs.readFileSync("./target.json", "utf8");
+    const config: TargetConfig = JSON.parse(rawData);
+
+    const targetDateTimeOptions = {
+      timeZone: config.timeZone,
+      time: config.startTime,
+    };
+
+    const baseOptions: BaseOptions = {
+      targetUrl: config.targetUrl,
+      paymentMethod: config.paymentMethod,
+    };
+
+    const batchOptionsArr: BatchOptions[] = config.batchOptionsArr.map(
+      (opt) => ({
+        ...baseOptions,
+        ...opt,
+        targetOpenTime: "OPEN " + opt.targetOpenTime,
+      })
+    );
+
+    const formattedConfig = { targetDateTimeOptions, batchOptionsArr };
+    console.log(formattedConfig);
+    
+    return formattedConfig;
+  } catch (e) {
+    console.error(color("error", `Error reading target.json: ${e}`));
+    process.exit(1);
+  }
 };
