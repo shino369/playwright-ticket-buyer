@@ -22,21 +22,21 @@ import "dotenv/config";
 
   const baseOption: BaseOption = {
     targetUrl:
-      "https://asobiticket2.asobistore.jp/receptions/e61874ea-c32a-4f27-958f-8a982eb8d1ad",
+      "https://asobiticket2.asobistore.jp/receptions/7afc1754-bc25-40f7-9af7-94d3a5390aa3",
     paymentMethod: "セブン-イレブン",
   };
 
   const batchOptions: BatchOption[] = [
     {
       ...baseOption,
-      targetDate: "2025/03/01",
-      targetVenue: "渋谷クラブクアトロ＜夜の部＞",
-      targetOpenTime: "OPEN " + "17:45",
+      targetDate: "2025/02/16",
+      targetVenue: "渋谷クラブクアトロ＜昼の部＞",
+      targetOpenTime: "OPEN " + "14:30",
       companion: false,
     },
     // {
     //   ...baseOption,
-    //   targetDate: "2025/03/02",
+    //   targetDate: "2025/02/16",
     //   targetVenue: "渋谷クラブクアトロ＜夜の部＞",
     //   targetOpenTime: "OPEN " + "17:45",
     //   companion: false,
