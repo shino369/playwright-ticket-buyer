@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
-import { color, getTargetConfig, sleep, waitUntil } from "./utils/index.js";
-import { login, runJob, runJobByPirority } from "./core/scenario.js";
+import { color, getTargetConfig, sleep, waitUntil } from "./utils/utils.js";
+import { login, runJobByPirority } from "./core/scenario.js";
 import "dotenv/config";
 
 (async () => {
@@ -34,7 +34,7 @@ import "dotenv/config";
     await sleep(30000);
   } catch (e) {
     const err = e instanceof Error ? e : new Error(e as any);
-    console.error(color("error", `An error occurred. ${err.message}`));
+    console.error(color("error", `Error: ${err.message}`));
   }
 
   await browser.close();

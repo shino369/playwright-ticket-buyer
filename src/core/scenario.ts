@@ -1,3 +1,4 @@
+import { BatchOptions, Job } from "../type.js";
 import {
   ElementNotFoundException,
   rethrowIfInstanceOf,
@@ -6,12 +7,10 @@ import {
 } from "../expections/customException.js";
 import {
   color,
-  BatchOptions,
   splitDateString,
-  sleep,
   retryWithBackoff,
-} from "../utils/index.js";
-import { BrowserContext, Locator, Page } from "playwright";
+} from "../utils/utils.js";
+import { BrowserContext, Page } from "playwright";
 
 export const login = async ({
   entryUrl,
@@ -66,12 +65,6 @@ export const login = async ({
   console.log(color("operation", "Logged in successfully."));
 };
 
-type Job = {
-  batchOptions: BatchOptions;
-  page: Page;
-  jobIndex: number;
-};
-
 export const runJobByPirority = async ({
   batchOptionsArr,
   context,
@@ -79,6 +72,7 @@ export const runJobByPirority = async ({
   batchOptionsArr: BatchOptions[];
   context: BrowserContext;
 }) => {
+  let ErrorCount = 0;
   const page = await context.newPage();
   for (const [jobIndex, batchOptions] of batchOptionsArr.entries()) {
     try {
@@ -91,10 +85,15 @@ export const runJobByPirority = async ({
           `[${jobIndex}] job ${jobIndex} failed. Reason: ${err.message}`
         )
       );
+      ErrorCount++;       
     }
   }
 
   page.close();
+
+  if (ErrorCount === batchOptionsArr.length) {
+    throw new Error("All jobs failed.");
+  }
 };
 
 export const runJob = async (job: Job) => {

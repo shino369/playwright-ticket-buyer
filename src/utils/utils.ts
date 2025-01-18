@@ -1,10 +1,13 @@
 import chalk from "chalk";
 import fs from "fs";
+import {
+  BaseOptions,
+  BatchOptions,
+  ColorType,
+  DateTimeOptions,
+  TargetConfig,
+} from "../type.js";
 
-/**
- * Colorize the message with the specified color.
- */
-type ColorType = "text" | "variable" | "error" | "operation";
 const themeColors = {
   text: "#ff8e4d",
   variable: "#ff624d",
@@ -20,33 +23,24 @@ export const sleep = async (ms: number) => {
   await new Promise((r) => setTimeout(r, ms));
 };
 
-type DateTimeOptions = {
-  timeZone: string; // e.g. "Asia/Tokyo"
-  time: string; // e.g. "2025-01-01 17:46:00"
-};
-
-type PaymentMethod =
-  | "ローソン"
-  | "セブン-イレブン"
-  | "ファミリーマート"
-  | "クレジットカード";
-
-export type BaseOptions = {
-  targetUrl: string;
-  paymentMethod: PaymentMethod;
-};
-
-export type BatchOptions = {
-  targetDate: string;
-  targetVenue: string;
-  targetOpenTime: string;
-  companion: boolean;
-} & BaseOptions;
-
 const checkTimeStringRegex = (time: string) => {
   const regex = new RegExp(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-  return regex.test(time);
+  const test = regex.test(time);
+  if (!test) {
+    throw new Error(
+      "Invalid time format. Please use the following format: 'YYYY-MM-DD HH:mm:ss'"
+    );
+  }
 };
+
+const checkTargetDateRegex = (targetDate: string) => {
+  const regex = new RegExp(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!regex.test(targetDate)) {
+    throw new Error(
+      "Invalid date format. Please use the following format: 'YYYY/MM/DD'"
+    );
+  }
+}
 
 export const waitUntil = async (targetTime: DateTimeOptions) => {
   /**
@@ -58,11 +52,7 @@ export const waitUntil = async (targetTime: DateTimeOptions) => {
 
   const { timeZone, time } = targetTime;
 
-  if (!checkTimeStringRegex(time)) {
-    throw new Error(
-      "Invalid time format. Please use the following format: 'YYYY-MM-DD HH:mm:ss'"
-    );
-  }
+  checkTimeStringRegex(time);
 
   const targetDateTime = new Date(time);
   const targetDateTimeUTC = targetDateTime.toUTCString();
@@ -91,30 +81,9 @@ export const waitUntil = async (targetTime: DateTimeOptions) => {
 };
 
 export const splitDateString = (targetDate: string) => {
-  // targetDate: "2025/03/01"
-
-  const regex = new RegExp(/^(\d{4})\/(\d{2})\/(\d{2})$/);
-  if (!regex.test(targetDate)) {
-    throw new Error(
-      "Invalid date format. Please use the following format: 'YYYY/MM/DD'"
-    );
-  }
-
+  checkTargetDateRegex(targetDate);
   const [year, month, day] = targetDate.split("/");
   return { year, month, day };
-};
-
-type TargetConfig = {
-  timeZone: string;
-  startTime: string;
-  targetUrl: string;
-  paymentMethod: PaymentMethod;
-  batchOptionsArr: {
-    targetDate: string;
-    targetVenue: string;
-    targetOpenTime: string;
-    companion: boolean;
-  }[];
 };
 
 export const getTargetConfig = () => {
