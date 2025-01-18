@@ -1,24 +1,24 @@
 {
   "timeZone": "Asia/Tokyo",
   "startTime": "2025-01-18 10:00:00",
-  "targetUrl": "https://asobiticket2.asobistore.jp/receptions/7afc1754-bc25-40f7-9af7-94d3a5390aa3",
+  "targetUrl": "https://www.******.jp/receptions/7afc1754-bc25-40f7-9af7-94d3a5390aa3",
   "paymentMethod": "セブン-イレブン",
   "batchOptionsArr": [
     {
       "targetDate": "2025/02/16",
-      "targetVenue": "渋谷クラブクアトロ＜昼の部＞",
+      "targetVenue": "venue name",
       "targetOpenTime": "14:30",
       "companion": false
     },
     {
       "targetDate": "2025/02/08",
-      "targetVenue": "名古屋クラブクアトロ＜夜の部＞",
+      "targetVenue": "venue name",
       "targetOpenTime": "17:45",
       "companion": false
     },
     {
       "targetDate": "2025/02/11",
-      "targetVenue": "梅田クラブクアトロ＜昼の部＞",
+      "targetVenue": "venue name",
       "targetOpenTime": "14:30",
       "companion": false
     }
