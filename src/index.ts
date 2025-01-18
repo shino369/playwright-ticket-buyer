@@ -1,13 +1,6 @@
 import { chromium } from "playwright";
-import {
-  BaseOptions,
-  BatchOptions,
-  color,
-  getTargetConfig,
-  sleep,
-  waitUntil,
-} from "./utils/index.js";
-import { login, runJob } from "./core/scenario.js";
+import { color, getTargetConfig, sleep, waitUntil } from "./utils/utils.js";
+import { login, runJobByPirority } from "./core/scenario.js";
 import "dotenv/config";
 
 (async () => {
@@ -31,20 +24,17 @@ import "dotenv/config";
       email,
       password,
     });
-
     await waitUntil(targetDateTimeOptions);
-
-    // run batch jobs (parallel async job not working as expected)
-    for (const [jobIndex, batchOptions] of batchOptionsArr.entries()) {
-      const page = await context.newPage();
-      await runJob({ batchOptions, page, jobIndex });
-    }
+    await runJobByPirority({
+      batchOptionsArr,
+      context,
+    });
 
     // wait for 30 seconds before closing the browser
     await sleep(30000);
   } catch (e) {
     const err = e instanceof Error ? e : new Error(e as any);
-    console.error(color("error", `An error occurred. ${err.message}`));
+    console.error(color("error", `Error: ${err.message}`));
   }
 
   await browser.close();

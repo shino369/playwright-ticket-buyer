@@ -1,7 +1,16 @@
 # Playwright-Ticket-Buyer
-A simple bot using playwright to automate the live ticket purchase process.\
-Recently only support one site.\
-Please modify the `.env` values and `target.json` for desired ticket.
+A simple bot using `playwright` to automate the purchase process of a specific ticket site.Please modify the `.env`  and `target.json` for desired ticket. Run in sequential.
+
+`Playwright`を使ってとASBのチケット購入を自動化するBOT。\
+`.env`と`target.json`に設定を入れて起動すれば、あとは自動的に開始時間まで待つことになる。
+
+`batchOptionsArr`はチケットの優先順位に従って入力してください。
+上のが失敗したら次のチケットで試すことになる。\
+\
+\
+＊あくまで自分の分を確保するためだけに使ってください。
+
+---
 
 ### Prerequisite
 
