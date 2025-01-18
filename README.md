@@ -14,7 +14,7 @@ A simple bot using `playwright` to automate the purchase process of a specific t
 
 ### Prerequisite
 
-`node.js` or related framework(s) is required.
+`node.js` or related framework(s) (deno,bun...) is required.
 
 ### How to start
 
