@@ -1,7 +1,6 @@
 import { BatchOptions, Job } from "../type.js";
 import {
   ElementNotFoundException,
-  rethrowIfInstanceOf,
   TicketNotAvailableException,
   TicketNotFoundException,
 } from "../expections/customException.js";
@@ -9,8 +8,13 @@ import {
   color,
   splitDateString,
   retryWithBackoff,
+  waitUntilNextPageLoaded,
+  rethrowIfInstanceOf,
+  reloadCurrentPageBeforeRetry,
+  sleep,
 } from "../utils/utils.js";
 import { BrowserContext, Page } from "playwright";
+import { loginTimeout, pageLoadTimeout, visibleTimeout } from "../constants/constants.js";
 
 export const login = async ({
   entryUrl,
@@ -57,7 +61,7 @@ export const login = async ({
 
   // wait until the page is redirected to entryUrl
   await page.waitForURL(entryUrl, {
-    timeout: 30000,
+    timeout: loginTimeout,
     waitUntil: "domcontentloaded",
   });
 
@@ -77,6 +81,8 @@ export const runJobByPirority = async ({
   for (const [jobIndex, batchOptions] of batchOptionsArr.entries()) {
     try {
       await runJob({ batchOptions, page, jobIndex });
+      // if the job is finished successfully, break the loop and ignore the rest of the jobs
+      break;
     } catch (e) {
       const err = e instanceof Error ? e : new Error(e as any);
       console.log(
@@ -85,11 +91,9 @@ export const runJobByPirority = async ({
           `[${jobIndex}] job ${jobIndex} failed. Reason: ${err.message}`
         )
       );
-      ErrorCount++;       
+      ErrorCount++;
     }
   }
-
-  page.close();
 
   if (ErrorCount === batchOptionsArr.length) {
     throw new Error("All jobs failed.");
@@ -115,9 +119,10 @@ export const runJob = async (job: Job) => {
     // retry the step with backoff
     await retryWithBackoff({
       fn: step,
-      exceptionHandler: (e) => {
+      exceptionHandler: async (e) => {
         console.error(color("error", `An error occurred: ${e}`));
         rethrowIfInstanceOf(e);
+        await reloadCurrentPageBeforeRetry(e, job);
       },
     });
   });
@@ -140,6 +145,7 @@ const proceedLandingPage = async (job: Job) => {
   );
   await checkSiteAvailability(job);
   await matchTargetLive(job);
+  await waitUntilNextPageLoaded(job, "choice");
 };
 
 const proceedSelectTicketPage = async (job: Job) => {
@@ -149,6 +155,7 @@ const proceedSelectTicketPage = async (job: Job) => {
   await selectLiveTicket(job);
   await addCompanion(job);
   await goNext(job);
+  await waitUntilNextPageLoaded(job, "payment");
 };
 
 const proceedSelectPaymentPage = async (job: Job) => {
@@ -157,6 +164,7 @@ const proceedSelectPaymentPage = async (job: Job) => {
   );
   await selectPayment(job);
   await goNext(job);
+  await waitUntilNextPageLoaded(job, "confirm");
 };
 
 const proceedTOSPage = async (job: Job) => {
@@ -166,6 +174,7 @@ const proceedTOSPage = async (job: Job) => {
   await agreeTerms(job);
   await saveScreenshot(job);
   await goNext(job);
+  await waitUntilNextPageLoaded(job, "complete");
 };
 
 const proceedFinishPage = async (job: Job) => {
@@ -184,16 +193,13 @@ const goNext = async (job: Job) => {
 
   const nextBtnSelector = ".next-button";
 
-  await page.waitForSelector(nextBtnSelector);
+  await page.waitForSelector(nextBtnSelector, { timeout: visibleTimeout });
   const nextBtn = page.locator(nextBtnSelector);
-  const isVisible = await nextBtn.isVisible({ timeout: 500 });
+  const isVisible = await nextBtn.isVisible({ timeout: visibleTimeout });
   if (!isVisible) {
     throw new ElementNotFoundException(`[${jobIndex}] The go next button`);
   }
   await nextBtn.click();
-  await page.waitForLoadState("domcontentloaded", {
-    timeout: 500,
-  });
 };
 
 /**
@@ -206,7 +212,16 @@ const checkSiteAvailability = async (job: Job) => {
   console.log(color("text", `[${jobIndex}] Going to the target site...`));
 
   const res = await page.goto(targetUrl, {
-    timeout: 30000,
+    timeout: pageLoadTimeout,
+    waitUntil: "domcontentloaded",
+  });
+
+  // important to wait for the page to load correctly.
+  // Some sites redirect back if the page does not exist
+  await sleep(150); 
+
+  await page.waitForURL(targetUrl, {
+    timeout: visibleTimeout,
     waitUntil: "domcontentloaded",
   });
 
@@ -226,9 +241,9 @@ const matchTargetLive = async (job: Job) => {
   console.log(color("text", `[${jobIndex}] Checking if target live exist...`));
   const splitedDate = splitDateString(targetDate);
 
-  // locate the target button with the desired text
+  // wait until the target live is visible. has delay for the animation
   await page.waitForSelector(".tour-act", {
-    timeout: 500,
+    timeout: visibleTimeout * 1.5,
   });
 
   /**
@@ -273,12 +288,12 @@ const matchTargetLive = async (job: Job) => {
     );
 
   const targetLive = tourActs;
-  const istargetLiveVisible = await targetLive.isVisible({ timeout: 500 });
+  const istargetLiveVisible = await targetLive.isVisible({ timeout: visibleTimeout });
 
   if (!istargetLiveVisible) {
     throw new TicketNotFoundException();
   }
-  const targetStatus = await targetLive.textContent({ timeout: 500 });
+  const targetStatus = await targetLive.textContent({ timeout: visibleTimeout });
   console.log(color("text", targetStatus));
 
   const proceedBtn = targetLive.locator("button", { hasText: "申込み" });
@@ -290,9 +305,6 @@ const matchTargetLive = async (job: Job) => {
   }
 
   await proceedBtn.click();
-
-  // redirect to the next page
-  await page.waitForLoadState("domcontentloaded");
 };
 
 /**
@@ -312,10 +324,10 @@ const selectLiveTicket = async (job: Job) => {
   const radioGroupSelector = "tpl-radio-group";
   const radioBtnSelector = "tpl-radio-button";
 
-  await page.waitForSelector(radioGroupSelector);
+  await page.waitForSelector(radioGroupSelector, { timeout: visibleTimeout });
   const radioGroup = page.locator(radioGroupSelector);
   const radioBtn = radioGroup.locator(radioBtnSelector).first();
-  const isVisible = await radioBtn.isVisible({ timeout: 500 });
+  const isVisible = await radioBtn.isVisible({ timeout: visibleTimeout });
 
   if (!isVisible) {
     throw new ElementNotFoundException(
@@ -346,14 +358,14 @@ const addCompanion = async (job: Job) => {
   const dialogBtnSelector = "tpl-companion-selector";
 
   const addTicket = page.locator(addTicketSelector);
-  const isAddTicketVisible = await addTicket.isVisible({ timeout: 500 });
+  const isAddTicketVisible = await addTicket.isVisible({ timeout: visibleTimeout });
 
   if (!isAddTicketVisible) {
     throw new ElementNotFoundException(`${jobIndex} The add ticket button`);
   }
   await addTicket.click();
   const companion = page.locator(dialogBtnSelector);
-  const isCompanionVisible = await companion.isVisible({ timeout: 500 });
+  const isCompanionVisible = await companion.isVisible({ timeout: visibleTimeout });
   if (!isCompanionVisible) {
     throw new ElementNotFoundException(`${jobIndex} The companion selector`);
   }
@@ -369,17 +381,17 @@ const addCompanion = async (job: Job) => {
   const confirmSelector =
     ".color-accent.size-small.type-filled.width-auto.icon-right";
 
-  await page.waitForSelector(dialogSelector);
+  await page.waitForSelector(dialogSelector, { timeout: visibleTimeout * 1.5 });
   // select the first companion
   const companionBtn = page.locator(companionSelector).first();
-  const isCompanionBtnVisible = await companionBtn.isVisible({ timeout: 500 });
+  const isCompanionBtnVisible = await companionBtn.isVisible({ timeout: visibleTimeout });
   if (!isCompanionBtnVisible) {
     throw new ElementNotFoundException(`${jobIndex} The companion button`);
   }
   await companionBtn.click();
-  await page.waitForSelector(confirmSelector);
+
   const confirmBtn = page.locator(confirmSelector);
-  const isConfirmBtnVisible = await confirmBtn.isVisible({ timeout: 500 });
+  const isConfirmBtnVisible = await confirmBtn.isVisible({ timeout: visibleTimeout });
   if (!isConfirmBtnVisible) {
     throw new ElementNotFoundException(
       `[${jobIndex}] The confirm button for adding companion`
@@ -389,7 +401,7 @@ const addCompanion = async (job: Job) => {
 };
 
 /**
- * select payment method. default 7-11
+ * select payment method
  * @param job
  */
 const selectPayment = async (job: Job) => {
@@ -406,21 +418,20 @@ const selectPayment = async (job: Job) => {
   const radioGroupSelector = "tpl-radio-group";
   const radioBtnSelector = "tpl-radio-button";
 
-  await page.waitForSelector(radioGroupSelector);
+  await page.waitForSelector(radioGroupSelector, { timeout: visibleTimeout * 1.5 });
   const paymentRadioGroup = page.locator(radioGroupSelector).first();
 
-  const paymentRadioBtn = (() => {
-    switch (paymentMethod) {
-      case "クレジットカード":
-        return paymentRadioGroup.locator(radioBtnSelector).first();
-      default:
-        return paymentRadioGroup.locator(radioBtnSelector, {
-          hasText: paymentMethod,
-        });
-    }
-  })();
+  const paymentRadioBtn = paymentRadioGroup.locator(radioBtnSelector, {
+    hasText: paymentMethod,
+  });
 
-  await paymentRadioBtn.click();
+  const isVisible = await paymentRadioBtn.isVisible({ timeout: visibleTimeout });
+  if (!isVisible) {
+    // if the target radio button is not visible, click the first one anyway
+    await paymentRadioGroup.locator(radioBtnSelector).first().click();
+  } else {
+    await paymentRadioBtn.click();
+  }
 };
 
 /**
@@ -437,9 +448,9 @@ const agreeTerms = async (job: Job) => {
   console.log(color("text", `[${jobIndex}] Checking terms of service box...`));
 
   const checkboxSelector = "tpl-checkbox";
-  await page.waitForSelector(checkboxSelector);
+  await page.waitForSelector(checkboxSelector, { timeout: visibleTimeout });
   const checkbox = page.locator(checkboxSelector);
-  const isVisible = await checkbox.isVisible({ timeout: 500 });
+  const isVisible = await checkbox.isVisible({ timeout: visibleTimeout });
   if (!isVisible) {
     throw new ElementNotFoundException(
       `[${jobIndex}] The checkbox for terms of service`
@@ -452,7 +463,7 @@ const agreeTerms = async (job: Job) => {
  * save a screenshot of the page
  * @param job
  */
-export const saveScreenshot = async (job: Job) => {
+const saveScreenshot = async (job: Job) => {
   const { page, jobIndex } = job;
 
   console.log(color("text", `[${jobIndex}] Saving the screenshot...`));

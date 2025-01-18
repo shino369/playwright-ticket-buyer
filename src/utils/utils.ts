@@ -6,7 +6,14 @@ import {
   BatchOptions,
   ColorType,
   DateTimeOptions,
+  Job,
 } from "../type.js";
+import {
+  PageNotLoadedCorrectlyException,
+  TicketNotAvailableException,
+  TicketNotFoundException,
+} from "../expections/customException.js";
+import { pageLoadTimeout } from "../constants/constants.js";
 
 const themeColors = {
   text: "#ff8e4d",
@@ -120,7 +127,7 @@ type TargetConfig = z.infer<typeof TargetConfigSchema>;
 
 export const getTargetConfig = () => {
   try {
-    const rawData = fs.readFileSync("./target.json", "utf8");
+    const rawData = fs.readFileSync("./test.json", "utf8");
     const config: TargetConfig = JSON.parse(rawData);
 
     TargetConfigSchema.parse(config);
@@ -170,7 +177,7 @@ export const retryWithBackoff = async <T>({
   baseDelay = 250,
 }: {
   fn: () => Promise<T>;
-  exceptionHandler: (e: any) => void;
+  exceptionHandler: (e: any) => Promise<void>;
   maxRetries?: number;
   baseDelay?: number;
 }) => {
@@ -179,7 +186,7 @@ export const retryWithBackoff = async <T>({
     try {
       return await fn();
     } catch (e) {
-      exceptionHandler(e);
+      await exceptionHandler(e);
       if (attempt === maxRetries - 1) throw e;
 
       await sleep(baseDelay * 2 ** attempt);
@@ -188,4 +195,34 @@ export const retryWithBackoff = async <T>({
     }
   }
   throw new Error("Max retries reached");
+};
+
+export const waitUntilNextPageLoaded = async (job: Job, step: string) => {
+  const targetId = job.batchOptions.targetUrl.split("/").pop();
+  const nextPageRegex = new RegExp(`entry/${targetId}/${step}`);
+  try {
+    await job.page.waitForURL(nextPageRegex, {
+      timeout: pageLoadTimeout,
+      waitUntil: "domcontentloaded",
+    });
+  } catch (e) {
+    throw new PageNotLoadedCorrectlyException(e);
+  }
+};
+
+export const rethrowIfInstanceOf = (e: any) => {
+  if (e instanceof TicketNotAvailableException) {
+    throw e;
+  }
+
+  if (e instanceof TicketNotFoundException) {
+    throw e;
+  }
+};
+
+export const reloadCurrentPageBeforeRetry = async (e: any, job: Job) => {
+  if (e instanceof PageNotLoadedCorrectlyException) {
+    console.log("Reloading current page...");
+    await job.page.reload({ timeout: pageLoadTimeout, waitUntil: "domcontentloaded" });
+  }
 };

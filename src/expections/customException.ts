@@ -18,12 +18,8 @@ export class ElementNotFoundException extends Error {
   }
 }
 
-export const rethrowIfInstanceOf = (e: any) => {
-  if (e instanceof TicketNotAvailableException) {
-    throw e;
+export class PageNotLoadedCorrectlyException extends Error {
+  constructor(e: any) {
+    super(`Target next page not loaded correctly. ${e}`);
   }
-
-  if (e instanceof TicketNotFoundException) {
-    throw e;
-  }
-};
+}
