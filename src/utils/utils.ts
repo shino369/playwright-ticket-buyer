@@ -25,7 +25,11 @@ type DateTimeOptions = {
   time: string; // e.g. "2025-01-01 17:46:00"
 };
 
-type PaymentMethod = "ローソン" | "セブン-イレブン" | "ファミリーマート";
+type PaymentMethod =
+  | "ローソン"
+  | "セブン-イレブン"
+  | "ファミリーマート"
+  | "クレジットカード";
 
 export type BaseOptions = {
   targetUrl: string;
@@ -146,18 +150,25 @@ export const getTargetConfig = () => {
   }
 };
 
-export const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
+export const retryWithBackoff = async <T>({
+  fn,
+  exceptionHandler,
   maxRetries = 3,
-  baseDelay = 250
-) => {
+  baseDelay = 250,
+}: {
+  fn: () => Promise<T>;
+  exceptionHandler: (e: any) => void;
+  maxRetries?: number;
+  baseDelay?: number;
+}) => {
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
       return await fn();
     } catch (e) {
-      console.error(color("error", `An error occurred: ${e}`));
+      exceptionHandler(e);
       if (attempt === maxRetries - 1) throw e;
+
       await sleep(baseDelay * 2 ** attempt);
       attempt++;
       console.log(color("text", `Retrying... Attempt ${attempt + 1}`));

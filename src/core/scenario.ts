@@ -1,11 +1,17 @@
 import {
+  ElementNotFoundException,
+  rethrowIfInstanceOf,
+  TicketNotAvailableException,
+  TicketNotFoundException,
+} from "../expections/customException.js";
+import {
   color,
   BatchOptions,
   splitDateString,
   sleep,
   retryWithBackoff,
 } from "../utils/index.js";
-import { Page } from "playwright";
+import { BrowserContext, Locator, Page } from "playwright";
 
 export const login = async ({
   entryUrl,
@@ -66,12 +72,60 @@ type Job = {
   jobIndex: number;
 };
 
+export const runJobByPirority = async ({
+  batchOptionsArr,
+  context,
+}: {
+  batchOptionsArr: BatchOptions[];
+  context: BrowserContext;
+}) => {
+  const page = await context.newPage();
+  for (const [jobIndex, batchOptions] of batchOptionsArr.entries()) {
+    try {
+      await runJob({ batchOptions, page, jobIndex });
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(e as any);
+      console.log(
+        color(
+          "error",
+          `[${jobIndex}] job ${jobIndex} failed. Reason: ${err.message}`
+        )
+      );
+    }
+  }
+
+  page.close();
+};
+
 export const runJob = async (job: Job) => {
-  await proceedLandingPage(job);
-  await proceedSelectTicketPage(job);
-  await proceedSelectPaymentPage(job);
-  await proceedTOSPage(job);
-  await proceedFinishPage(job);
+  console.log(
+    color("operation", [
+      `[${job.jobIndex}] Running job...`,
+      `Target date: ${job.batchOptions.targetDate}`,
+      `Target venue: ${job.batchOptions.targetVenue}`,
+      `Target open time: ${job.batchOptions.targetOpenTime}`,
+    ])
+  );
+  const steps = [
+    async () => proceedLandingPage(job),
+    async () => proceedSelectTicketPage(job),
+    async () => proceedSelectPaymentPage(job),
+    async () => proceedTOSPage(job),
+    async () => proceedFinishPage(job),
+  ].map((step, index) => async () => {
+    // retry the step with backoff
+    await retryWithBackoff({
+      fn: step,
+      exceptionHandler: (e) => {
+        console.error(color("error", `An error occurred: ${e}`));
+        rethrowIfInstanceOf(e);
+      },
+    });
+  });
+
+  for (const step of steps) {
+    await step();
+  }
 
   console.log(
     color(
@@ -127,16 +181,19 @@ const proceedFinishPage = async (job: Job) => {
  * @param job
  */
 const goNext = async (job: Job) => {
-  const { page } = job;
+  const { page, jobIndex } = job;
 
-  await page.waitForSelector(".next-button");
-  const nextBtn = page.locator(".next-button");
-  if (!nextBtn) {
-    throw new Error("The next button is not found.");
+  const nextBtnSelector = ".next-button";
+
+  await page.waitForSelector(nextBtnSelector);
+  const nextBtn = page.locator(nextBtnSelector);
+  const isVisible = await nextBtn.isVisible({ timeout: 500 });
+  if (!isVisible) {
+    throw new ElementNotFoundException(`[${jobIndex}] The go next button`);
   }
   await nextBtn.click();
   await page.waitForLoadState("domcontentloaded", {
-    timeout: 5000,
+    timeout: 500,
   });
 };
 
@@ -172,35 +229,68 @@ const matchTargetLive = async (job: Job) => {
 
   // locate the target button with the desired text
   await page.waitForSelector(".tour-act", {
-    timeout: 3000,
+    timeout: 500,
   });
 
   /**
-   * locate the target .tour-act with children:
+   * use playwright locate the target .tour-act with children:
    * 1. .act-venue with text `targetVenue`
    * 2. .open-time with text `targetOpenTime`
+   * 3. .act-date-year with text `splitedDate.year`
+   * 4. .act-date-month with text `splitedDate.month`
+   * 5. .act-date-day with text `splitedDate.day`
+   *
+   * you should match all of the above children
    */
 
-  const tourAct = page
+  const tourActs = page
     .locator(".tour-act", {
-      has:
-        page.locator(".act-venue", { hasText: targetVenue }) &&
-        page.locator(".open-time", { hasText: targetOpenTime }) &&
-        page.locator(".act-date-year", { hasText: splitedDate.year }) &&
-        page.locator(".act-date-month", { hasText: splitedDate.month }) &&
-        page.locator(".act-date-day", { hasText: splitedDate.day }),
+      has: page.locator(".act-venue", { hasText: targetVenue }),
     })
-    .last(); // assume the last one should be latest
+    .and(
+      page.locator(".tour-act", {
+        has: page.locator(".act-venue", { hasText: targetVenue }),
+      })
+    )
+    .and(
+      page.locator(".tour-act", {
+        has: page.locator(".open-time", { hasText: targetOpenTime }),
+      })
+    )
+    .and(
+      page.locator(".tour-act", {
+        has: page.locator(".act-date-year", { hasText: splitedDate.year }),
+      })
+    )
+    .and(
+      page.locator(".tour-act", {
+        has: page.locator(".act-date-month", { hasText: splitedDate.month }),
+      })
+    )
+    .and(
+      page.locator(".tour-act", {
+        has: page.locator(".act-date-day", { hasText: splitedDate.day }),
+      })
+    );
 
-  if (!tourAct) {
-    throw new Error("The target act is not found.");
+  const targetLive = tourActs;
+  const istargetLiveVisible = await targetLive.isVisible({ timeout: 500 });
+
+  if (!istargetLiveVisible) {
+    throw new TicketNotFoundException();
+  }
+  const targetStatus = await targetLive.textContent({ timeout: 500 });
+  console.log(color("text", targetStatus));
+
+  const proceedBtn = targetLive.locator("button", { hasText: "申込み" });
+  const isDisabled = await proceedBtn.evaluate((el) =>
+    el.classList.contains("disabled")
+  );
+  if (isDisabled) {
+    throw new TicketNotAvailableException();
   }
 
-  await tourAct
-    .locator(
-      '.color-primary.size-small.type-filled.width-auto.icon-right:has-text("申込み")'
-    )
-    .click();
+  await proceedBtn.click();
 
   // redirect to the next page
   await page.waitForLoadState("domcontentloaded");
@@ -226,8 +316,12 @@ const selectLiveTicket = async (job: Job) => {
   await page.waitForSelector(radioGroupSelector);
   const radioGroup = page.locator(radioGroupSelector);
   const radioBtn = radioGroup.locator(radioBtnSelector).first();
-  if (!radioBtn) {
-    throw new Error("The target radio button is not found.");
+  const isVisible = await radioBtn.isVisible({ timeout: 500 });
+
+  if (!isVisible) {
+    throw new ElementNotFoundException(
+      `[${jobIndex}] target radio button for selecting ticket`
+    );
   }
   await radioBtn.click();
 };
@@ -253,13 +347,16 @@ const addCompanion = async (job: Job) => {
   const dialogBtnSelector = "tpl-companion-selector";
 
   const addTicket = page.locator(addTicketSelector);
-  if (!addTicket) {
-    throw new Error("The target button is not found.");
+  const isAddTicketVisible = await addTicket.isVisible({ timeout: 500 });
+
+  if (!isAddTicketVisible) {
+    throw new ElementNotFoundException(`${jobIndex} The add ticket button`);
   }
   await addTicket.click();
   const companion = page.locator(dialogBtnSelector);
-  if (!companion) {
-    throw new Error("The companion selector is not found.");
+  const isCompanionVisible = await companion.isVisible({ timeout: 500 });
+  if (!isCompanionVisible) {
+    throw new ElementNotFoundException(`${jobIndex} The companion selector`);
   }
   await companion.click();
   /**
@@ -276,14 +373,18 @@ const addCompanion = async (job: Job) => {
   await page.waitForSelector(dialogSelector);
   // select the first companion
   const companionBtn = page.locator(companionSelector).first();
-  if (!companionBtn) {
-    throw new Error("The companion button is not found.");
+  const isCompanionBtnVisible = await companionBtn.isVisible({ timeout: 500 });
+  if (!isCompanionBtnVisible) {
+    throw new ElementNotFoundException(`${jobIndex} The companion button`);
   }
   await companionBtn.click();
   await page.waitForSelector(confirmSelector);
   const confirmBtn = page.locator(confirmSelector);
-  if (!confirmBtn) {
-    throw new Error("The confirm button is not found.");
+  const isConfirmBtnVisible = await confirmBtn.isVisible({ timeout: 500 });
+  if (!isConfirmBtnVisible) {
+    throw new ElementNotFoundException(
+      `[${jobIndex}] The confirm button for adding companion`
+    );
   }
   await confirmBtn.click();
 };
@@ -308,9 +409,18 @@ const selectPayment = async (job: Job) => {
 
   await page.waitForSelector(radioGroupSelector);
   const paymentRadioGroup = page.locator(radioGroupSelector).first();
-  const paymentRadioBtn = paymentRadioGroup.locator(radioBtnSelector, {
-    hasText: paymentMethod,
-  });
+
+  const paymentRadioBtn = (() => {
+    switch (paymentMethod) {
+      case "クレジットカード":
+        return paymentRadioGroup.locator(radioBtnSelector).first();
+      default:
+        return paymentRadioGroup.locator(radioBtnSelector, {
+          hasText: paymentMethod,
+        });
+    }
+  })();
+
   await paymentRadioBtn.click();
 };
 
@@ -330,8 +440,11 @@ const agreeTerms = async (job: Job) => {
   const checkboxSelector = "tpl-checkbox";
   await page.waitForSelector(checkboxSelector);
   const checkbox = page.locator(checkboxSelector);
-  if (!checkbox) {
-    throw new Error("The checkbox is not found.");
+  const isVisible = await checkbox.isVisible({ timeout: 500 });
+  if (!isVisible) {
+    throw new ElementNotFoundException(
+      `[${jobIndex}] The checkbox for terms of service`
+    );
   }
   await checkbox.click();
 };
