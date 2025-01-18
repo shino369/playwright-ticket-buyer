@@ -30,16 +30,3 @@ export type Job = {
   page: Page;
   jobIndex: number;
 };
-
-export type TargetConfig = {
-  timeZone: string;
-  startTime: string;
-  targetUrl: string;
-  paymentMethod: PaymentMethod;
-  batchOptionsArr: {
-    targetDate: string;
-    targetVenue: string;
-    targetOpenTime: string;
-    companion: boolean;
-  }[];
-};

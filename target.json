@@ -11,9 +11,15 @@
       "companion": false
     },
     {
-      "targetDate": "2025/02/16",
-      "targetVenue": "渋谷クラブクアトロ＜夜の部＞",
+      "targetDate": "2025/02/08",
+      "targetVenue": "名古屋クラブクアトロ＜夜の部＞",
       "targetOpenTime": "17:45",
+      "companion": false
+    },
+    {
+      "targetDate": "2025/02/11",
+      "targetVenue": "梅田クラブクアトロ＜昼の部＞",
+      "targetOpenTime": "14:30",
       "companion": false
     }
   ]
