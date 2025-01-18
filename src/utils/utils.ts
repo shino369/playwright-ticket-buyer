@@ -127,7 +127,7 @@ type TargetConfig = z.infer<typeof TargetConfigSchema>;
 
 export const getTargetConfig = () => {
   try {
-    const rawData = fs.readFileSync("./test.json", "utf8");
+    const rawData = fs.readFileSync("./target.json", "utf8");
     const config: TargetConfig = JSON.parse(rawData);
 
     TargetConfigSchema.parse(config);
