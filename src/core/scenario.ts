@@ -3,7 +3,7 @@ import {
   ElementNotFoundException,
   TicketNotAvailableException,
   TicketNotFoundException,
-} from "../excepctions/customException.js";
+} from "../exceptions/customException.js";
 import {
   color,
   splitDateString,
