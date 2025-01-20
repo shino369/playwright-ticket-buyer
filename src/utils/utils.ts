@@ -12,7 +12,7 @@ import {
   PageNotLoadedCorrectlyException,
   TicketNotAvailableException,
   TicketNotFoundException,
-} from "../excepctions/customException.js";
+} from "../exceptions/customException.js";
 import { pageLoadTimeout } from "../constants/constants.js";
 
 const themeColors = {
