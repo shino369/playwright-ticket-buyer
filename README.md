@@ -7,6 +7,8 @@ A simple bot using `playwright` to automate the purchase process of a specific t
 `batchOptionsArr`はチケットの優先順位に従って入力してください。
 上のが失敗したら次のチケットで試すことになる。\
 \
+まだ試験中のため、失敗する可能性があります。
+\
 \
 ＊あくまで自分の分を確保するためだけに使ってください。
 
